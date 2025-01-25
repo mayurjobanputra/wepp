@@ -1,15 +1,13 @@
 // Imports
-var { ipcRenderer, remote } = require('electron');
-var main = remote.require('./main.js');
-const { dialog } = require('electron').remote;
+const { ipcRenderer } = require('electron');
 
 // Helpers
 const dom = query => document.querySelector(query);
 const addClass = (query, className) => dom(query).classList.add(className);
-const removeClass = (query, className) =>
-  dom(query).classList.remove(className);
+const removeClass = (query, className) => dom(query).classList.remove(className);
 const drop = document.getElementById('drop');
 
+// Drag and drop handlers
 drop.ondragover = () => {
   addClass('body', 'drag');
   return false;
@@ -25,51 +23,44 @@ drop.ondragend = () => {
   return false;
 };
 
-drop.ondrop = e => {
+drop.ondrop = async (e) => {
   e.preventDefault();
   removeClass('body', 'drag');
 
   const files = e.dataTransfer.files;
 
-  dialog.showOpenDialog(
-    {
-      title: 'Choose a directory where the WebP files will be saved.',
-      buttonLabel: 'Convert',
-      properties: ['openDirectory'],
-    },
-    path => {
-      if (!path) {
-        return false;
-      }
+  try {
+    // Show directory selection dialog
+    const outputPath = await ipcRenderer.invoke('show-save-dialog');
+    if (!outputPath) return false;
 
-      addClass('body', 'loading');
+    addClass('body', 'loading');
 
-      const output = path[0];
-      let queue = [];
+    // Process each file
+    const queue = Array.from(files).map(async (f) => {
+      const fileName = f.name.replace(/\.[^/.]+$/, '');
+      return await ipcRenderer.invoke('convert-to-webp', {
+        inputPath: f.path,
+        inputName: fileName,
+        outputPath
+      });
+    });
 
-      for (let f of files) {
-        const fileName = f.name.replace(/\.[^/.]+$/, '');
-        queue.push(main.convertFileToWebp(f.path, fileName, output));
-      }
+    // Wait for all conversions to complete
+    await Promise.all(queue);
+    removeClass('body', 'loading');
 
-      Promise.all(queue)
-        .then(() => {
-          removeClass('body', 'loading');
-
-          dialog.showMessageBox(main.mainWindow, {
-            type: 'info',
-            message: `Success! ${files.length} ${files.length > 1
-              ? 'files were'
-              : 'file was'} converted to WebP.`,
-          });
-        })
-        .catch(err => {
-          removeClass('body', 'loading');
-
-          dialog.showErrorBox('Sorry!', `${err.message}.`);
-        });
-    }
-  );
+    // Show success message
+    await ipcRenderer.invoke('show-message', {
+      type: 'info',
+      message: `Success! ${files.length} ${
+        files.length > 1 ? 'files were' : 'file was'
+      } converted to WebP.`
+    });
+  } catch (err) {
+    removeClass('body', 'loading');
+    await ipcRenderer.invoke('show-error', err.message);
+  }
 
   return false;
 };

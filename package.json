@@ -6,17 +6,17 @@
   "scripts": {
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
-    "build":
-      "electron-packager . wepp --platform=mas --icon=./build/icon.icns --production --overwrite"
+    "build": "electron-packager . wepp --platform=mas --icon=./build/icon.icns --production --overwrite"
   },
   "repository": "https://github.com/fabe/wepp",
   "author": "Fabian Schultz",
   "license": "MIT",
   "devDependencies": {
-    "electron": "~1.7.8",
-    "electron-packager": "^9.1.0"
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "electron-packager": "^17.1.2"
   },
   "dependencies": {
-    "sharp": "^0.18.4"
+    "sharp": "^0.33.1"
   }
 }

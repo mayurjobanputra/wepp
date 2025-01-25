@@ -1,15 +1,8 @@
-const electron = require('electron');
-// Module to control application life.
-const app = electron.app;
-// Module to create native browser window.
-const BrowserWindow = electron.BrowserWindow;
-
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const url = require('url');
 const sharp = require('sharp');
 
-// Keep a global reference of the window object, if you don't, the window will
-// be closed automatically when the JavaScript object is garbage collected.
+// Keep a global reference of the window object
 let mainWindow;
 
 function createWindow() {
@@ -20,67 +13,74 @@ function createWindow() {
     titleBarStyle: 'hidden',
     backgroundColor: '#101A1F',
     show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      enableRemoteModule: true
+    }
   });
 
-  // and load the index.html of the app.
-  mainWindow.loadURL(
-    url.format({
-      pathname: path.join(__dirname, 'index.html'),
-      protocol: 'file:',
-      slashes: true,
-    })
-  );
+  // Load the index.html of the app
+  mainWindow.loadFile('index.html');
 
-  // Open the DevTools.
-  // mainWindow.webContents.openDevTools();
-
-  // Emitted when the window is closed.
-  mainWindow.on('closed', function() {
-    // Dereference the window object, usually you would store windows
-    // in an array if your app supports multi windows, this is the time
-    // when you should delete the corresponding element.
-    mainWindow = null;
-  });
-
+  // Show window when ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  exports.mainWindow = mainWindow;
+  // Window closed event
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+// App ready event
+app.whenReady().then(createWindow);
 
-// Quit when all windows are closed.
-app.on('window-all-closed', function() {
-  // On OS X it is common for applications and their menu bar
-  // to stay active until the user quits explicitly with Cmd + Q
+// Quit when all windows are closed
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-app.on('activate', function() {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
 });
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
-exports.convertFileToWebp = (inputPath, inputName, outputPath) => {
-  return new Promise((resolve, reject) => {
-    sharp(inputPath).toFile(`${outputPath}/${inputName}.webp`, (err, info) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(info);
-      }
-    });
+// Handle WebP conversion
+async function convertFileToWebp(inputPath, inputName, outputPath) {
+  try {
+    await sharp(inputPath).toFile(`${outputPath}/${inputName}.webp`);
+    return true;
+  } catch (err) {
+    throw err;
+  }
+}
+
+// IPC handlers
+ipcMain.handle('show-save-dialog', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose a directory where the WebP files will be saved.',
+    buttonLabel: 'Convert',
+    properties: ['openDirectory']
   });
-};
+  return result.filePaths[0];
+});
+
+ipcMain.handle('convert-to-webp', async (event, { inputPath, inputName, outputPath }) => {
+  return await convertFileToWebp(inputPath, inputName, outputPath);
+});
+
+ipcMain.handle('show-message', async (event, { type, message }) => {
+  await dialog.showMessageBox(mainWindow, {
+    type,
+    message
+  });
+});
+
+ipcMain.handle('show-error', async (event, message) => {
+  await dialog.showErrorBox('Sorry!', message);
+});
